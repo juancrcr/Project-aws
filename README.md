@@ -46,4 +46,9 @@ python -m unittest discover -s src -p "*test*.py" -v
 5. Buat **API Gateway (HTTP API)** dengan rute `/health`, `/loans`, dan `/loans/{loan_id}` yang terintegrasi ke Lambda.
 6. Verifikasi konektivitas menggunakan Lambda Test Event dan `curl` ke Invoke URL API Gateway.
 
+## Auto-Setup untuk AWS Sandbox (Reset Tiap 3 Jam)
+Karena sesi AWS Sandbox / Learner Lab akan ter-reset setelah 3 jam, gunakan script berikut untuk membuat ulang seluruh resource dalam sekali jalan dan menyimpan bukti/backup ke lokal:
+- `scripts/setup-aws.ps1` (Windows PowerShell) / `scripts/setup-aws.sh` (CloudShell / Bash) — Membuat tabel DynamoDB, deploy Lambda `equipment-loans-api` dengan `LabRole`, setup API Gateway HTTP API, dan uji `/health`.
+- `scripts/save-evidence.ps1` — Menjalankan test CRUD live, menyimpan output ke `evidence/`, dan mem-backup isi tabel DynamoDB ke JSON lokal.
+
 Panduan lengkap langkah demi langkah tersedia di [docs/aws-setup-guide.md](docs/aws-setup-guide.md).
