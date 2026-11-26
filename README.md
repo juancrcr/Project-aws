@@ -4,7 +4,7 @@ Proyek individu AWS Cloud Computing Week 12 (Design & AWS Setup), Track C Server
 
 - **Nama:** Juan Christopher Reinaldo Sipayung (24/544528/TK/60526)
 - **Region:** `us-east-1` (AWS Learner Lab)
-- **Laporan lengkap** (architecture diagram, design brief, deployment plan, AWS evidence): [`docs/Laporan_Week12.pdf`](docs/Laporan_Week12.pdf)
+- **Laporan lengkap** (architecture diagram, design brief, deployment plan, AWS evidence): [`docs/Laporan_Week12.pdf`](docs/Laporan_Week12.pdf) (versi editable Word/Docs: [`docs/Laporan_Week12.docx`](docs/Laporan_Week12.docx))
 
 ## Arsitektur
 
@@ -13,7 +13,7 @@ Proyek individu AWS Cloud Computing Week 12 (Design & AWS Setup), Track C Server
 Client → Lambda Function URL (HTTPS) → AWS Lambda `equipment-loans-api` → Amazon DynamoDB `equipment-loans`. Log ke CloudWatch Logs. Akses lewat IAM `LabRole`.
 
 ## Komponen Utama
-1. **Lambda Function URL** sebagai endpoint HTTPS publik (payload format v2.0). Dipakai sebagai pengganti API Gateway karena role sandbox `voclabs` membatasi `apigateway:POST`.
+1. **Lambda Function URL** sebagai endpoint HTTPS publik (payload format v2.0). Dipakai sebagai pengganti API Gateway karena role sandbox `voclabs` membatasi `apigateway:POST` / `apigateway:PUT`.
 2. **AWS Lambda** (Python 3.12) bernama `equipment-loans-api`: logika CRUD entitas `EquipmentLoan`, dan membuat tabel DynamoDB otomatis bila belum ada.
 3. **Amazon DynamoDB** tabel `equipment-loans`, partition key `loan_id` (String), mode On-demand.
 4. **IAM `LabRole`** sebagai execution role Lambda untuk akses DynamoDB dan CloudWatch Logs.
@@ -52,10 +52,11 @@ curl -X PUT "$URL/loans/<loan_id>" -H "Content-Type: application/json" -d '{"sta
 ```text
 .
 ├── docs/
-│   ├── Laporan_Week12.pdf                      # laporan lengkap (diagram, design brief, evidence)
+│   ├── Laporan_Week12.docx                     # laporan versi editable (Word / Google Docs)
+│   ├── Laporan_Week12.pdf                      # laporan lengkap siap kumpul (PDF)
 │   └── arsitektur-equipment-loans.drawio.png   # architecture diagram
 ├── evidence/
-│   ├── screenshots/                            # screenshot konsol AWS (01-07)
+│   ├── screenshots/                            # screenshot konsol AWS (01-09)
 │   ├── aws-evidence-*.txt                      # output uji live
 │   └── dynamodb-backup-*.json                  # backup isi tabel
 ├── scripts/
