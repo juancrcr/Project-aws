@@ -1,10 +1,10 @@
 # AWS Equipment Loans API
 
-Proyek individu AWS Cloud Computing Week 12 (Design & AWS Setup), Track C Serverless, kasus peminjaman alat laboratorium.
+Proyek individu AWS Cloud Computing Week 12 , Track C Serverless, kasus peminjaman alat laboratorium.
 
 - **Nama:** Juan Christopher Reinaldo Sipayung (24/544528/TK/60526)
 - **Region:** `us-east-1` (AWS Learner Lab)
-- **Laporan lengkap** (architecture diagram, design brief, deployment plan, AWS evidence): [`docs/Laporan_Week12.pdf`](docs/Laporan_Week12.pdf) (versi editable Word/Docs: [`docs/Laporan_Week12.docx`](docs/Laporan_Week12.docx))
+- **Laporan lengkap** (architecture diagram, design brief, deployment plan, AWS evidence): [`docs/Laporan_Week12.pdf`](docs/Laporan_Week12.pdf)
 
 ## Arsitektur
 
