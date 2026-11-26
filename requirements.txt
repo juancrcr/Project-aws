@@ -1,0 +1,3 @@
+# Sudah tersedia di runtime AWS Lambda; hanya dibutuhkan untuk menjalankan kode terhadap AWS dari lokal.
+# Unit test offline (src/local_test.py) tidak memerlukan boto3.
+boto3>=1.34
