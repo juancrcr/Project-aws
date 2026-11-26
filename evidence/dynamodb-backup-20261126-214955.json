@@ -1,0 +1,33 @@
+﻿{
+    "Items": [
+        {
+            "quantity": {
+                "N": "1"
+            },
+            "equipment_name": {
+                "S": "Oscilloscope Rigol DS1054Z"
+            },
+            "borrowed_at": {
+                "S": "2026-11-26T14:50:01.051205+00:00"
+            },
+            "status": {
+                "S": "BORROWED"
+            },
+            "borrower_id": {
+                "S": "220123456"
+            },
+            "borrower_name": {
+                "S": "Budi Santoso"
+            },
+            "due_date": {
+                "S": "2026-12-03"
+            },
+            "loan_id": {
+                "S": "9a9b8f20-1fed-49e8-9b49-49b7aceb179e"
+            }
+        }
+    ],
+    "Count": 1,
+    "ScannedCount": 1,
+    "ConsumedCapacity": null
+}

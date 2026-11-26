@@ -78,7 +78,7 @@ code{font-family:Consolas,monospace;font-size:10pt}
 </ol>
 
 <h2>4. AWS Evidence</h2>
-<p>Pengujian live dilakukan pada AWS Learner Lab, region us-east-1, endpoint <code>https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws</code>.</p>
+<p>Pengujian live dilakukan pada AWS Learner Lab di region <code>us-east-1</code>. Screenshot konsol (Bukti 1–7) diambil pada sesi awal (<code>https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws</code>), sedangkan pengujian siklus CRUD penuh (Bukti 8) dijalankan ulang melalui script otomasi setelah sesi sandbox berikutnya aktif (<code>https://77rrmmovdyzjfo7wajyowsvwcm0dmyus.lambda-url.us-east-1.on.aws</code>), sekaligus membuktikan desain bersifat <i>reproducible</i> lintas reset sandbox.</p>
 <figure><img src="../../evidence/screenshots/01-dynamodb-table.png"><figcaption><b>Bukti 1. Tabel DynamoDB.</b> Tabel <code>equipment-loans</code> berstatus Active, partition key <code>loan_id</code> (String), mode On-demand. Item count 0 karena DynamoDB memperbarui hitungan sekitar setiap 6 jam; jumlah item sebenarnya terlihat pada Bukti 2.</figcaption></figure>
 <figure><img src="../../evidence/screenshots/02-dynamodb-explore-items.png"><figcaption><b>Bukti 2. Explore items.</b> Tabel menampilkan 2 item peminjaman yang berhasil tersimpan.</figcaption></figure>
 <figure><img src="../../evidence/screenshots/03-lambda-overview.png"><figcaption><b>Bukti 3. Overview Lambda.</b> Function ARN, Function URL, dan execution role LabRole.</figcaption></figure>
@@ -86,65 +86,125 @@ code{font-family:Consolas,monospace;font-size:10pt}
 <figure><img src="../../evidence/screenshots/05-iam-labrole.png"><figcaption><b>Bukti 5. IAM Role LabRole.</b> 4 policy terpasang. Akses ke DynamoDB terbukti secara fungsional karena Lambda berhasil membuat tabel dan menyimpan item (Bukti 1, 2, dan 7).</figcaption></figure>
 <figure><img src="../../evidence/screenshots/06-lambda-test-health.png"><figcaption><b>Bukti 6. Test health check.</b> Tab Test di konsol Lambda: eksekusi <code>/health</code> berhasil, statusCode 200, table_status ACTIVE.</figcaption></figure>
 <figure><img src="../../evidence/screenshots/07-browser-get-loans.png"><figcaption><b>Bukti 7. Akses endpoint dari browser.</b> Akses langsung <code>/loans</code> menampilkan JSON dengan 2 item peminjaman.</figcaption></figure>
-<h3>Bukti 8. Output uji live (teks)</h3>
-<p>Isi lengkap file <code>evidence/aws-evidence-20261126-120628.txt</code>:</p>
-<pre>=== AWS SANDBOX EVIDENCE (20261126-120628) ===
-Invoke URL : https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws
+<h3>Bukti 8. Output uji siklus CRUD lengkap (live)</h3>
+<p>Isi lengkap file <code>evidence/aws-evidence-20261126-214955.txt</code> yang mencakup <code>GET /health</code>, <code>POST /loans</code> (Create), <code>GET /loans</code> (Read list), <code>GET /loans/{id}</code> (Read detail), <code>PUT /loans/{id}</code> (Update status menjadi <code>RETURNED</code> + pengisian otomatis <code>returned_at</code>), <code>DELETE /loans/{id}</code> (Delete), dan verifikasi <code>404 Not Found</code> setelah penghapusan:</p>
+<pre>=== AWS LEARNER LAB EVIDENCE (20261126-214955) ===
+Invoke URL : https://77rrmmovdyzjfo7wajyowsvwcm0dmyus.lambda-url.us-east-1.on.aws
 
---- 1. GET /health ---
+--- 1. Health check (GET /health) ---
 {
     &quot;status&quot;:  &quot;ok&quot;,
     &quot;table&quot;:  &quot;equipment-loans&quot;,
     &quot;table_status&quot;:  &quot;ACTIVE&quot;
 }
 
---- 2. POST /loans (Create Sample) ---
+--- 2a. Create sample tetap (POST /loans) ---
 {
     &quot;message&quot;:  &quot;Loan created&quot;,
     &quot;item&quot;:  {
-                 &quot;loan_id&quot;:  &quot;b9b732d8-7f39-4572-b43e-56bb7f570d3b&quot;,
+                 &quot;loan_id&quot;:  &quot;9a9b8f20-1fed-49e8-9b49-49b7aceb179e&quot;,
                  &quot;borrower_name&quot;:  &quot;Budi Santoso&quot;,
                  &quot;borrower_id&quot;:  &quot;220123456&quot;,
                  &quot;equipment_name&quot;:  &quot;Oscilloscope Rigol DS1054Z&quot;,
                  &quot;quantity&quot;:  1,
                  &quot;status&quot;:  &quot;BORROWED&quot;,
-                 &quot;borrowed_at&quot;:  &quot;2026-11-26T05:06:34.844083+00:00&quot;,
+                 &quot;borrowed_at&quot;:  &quot;2026-11-26T14:50:01.051205+00:00&quot;,
                  &quot;due_date&quot;:  &quot;2026-12-03&quot;
              }
 }
 
---- 3. GET /loans (List) ---
+--- 2b. Create untuk siklus CRUD (POST /loans) ---
+{
+    &quot;message&quot;:  &quot;Loan created&quot;,
+    &quot;item&quot;:  {
+                 &quot;loan_id&quot;:  &quot;955eba62-9b78-46af-a1f1-2bb4b9d3237a&quot;,
+                 &quot;borrower_name&quot;:  &quot;Siti Aminah&quot;,
+                 &quot;borrower_id&quot;:  &quot;240544528&quot;,
+                 &quot;equipment_name&quot;:  &quot;Digital Multimeter Fluke 117&quot;,
+                 &quot;quantity&quot;:  2,
+                 &quot;status&quot;:  &quot;BORROWED&quot;,
+                 &quot;borrowed_at&quot;:  &quot;2026-11-26T14:50:01.634407+00:00&quot;,
+                 &quot;due_date&quot;:  &quot;2026-12-05&quot;
+             }
+}
+
+--- 3. Read list (GET /loans) ---
 {
     &quot;count&quot;:  2,
     &quot;items&quot;:  [
                   {
                       &quot;quantity&quot;:  1,
                       &quot;equipment_name&quot;:  &quot;Oscilloscope Rigol DS1054Z&quot;,
-                      &quot;borrowed_at&quot;:  &quot;2026-11-26T05:06:34.844083+00:00&quot;,
+                      &quot;borrowed_at&quot;:  &quot;2026-11-26T14:50:01.051205+00:00&quot;,
                       &quot;status&quot;:  &quot;BORROWED&quot;,
                       &quot;borrower_id&quot;:  &quot;220123456&quot;,
                       &quot;borrower_name&quot;:  &quot;Budi Santoso&quot;,
                       &quot;due_date&quot;:  &quot;2026-12-03&quot;,
-                      &quot;loan_id&quot;:  &quot;b9b732d8-7f39-4572-b43e-56bb7f570d3b&quot;
+                      &quot;loan_id&quot;:  &quot;9a9b8f20-1fed-49e8-9b49-49b7aceb179e&quot;
                   },
                   {
-                      &quot;quantity&quot;:  1,
-                      &quot;equipment_name&quot;:  &quot;Oscilloscope Rigol DS1054Z&quot;,
-                      &quot;borrowed_at&quot;:  &quot;2026-11-26T05:05:50.848305+00:00&quot;,
+                      &quot;quantity&quot;:  2,
+                      &quot;equipment_name&quot;:  &quot;Digital Multimeter Fluke 117&quot;,
+                      &quot;borrowed_at&quot;:  &quot;2026-11-26T14:50:01.634407+00:00&quot;,
                       &quot;status&quot;:  &quot;BORROWED&quot;,
-                      &quot;borrower_id&quot;:  &quot;220123456&quot;,
-                      &quot;borrower_name&quot;:  &quot;Budi Santoso&quot;,
-                      &quot;due_date&quot;:  &quot;2026-12-03&quot;,
-                      &quot;loan_id&quot;:  &quot;d08c43dd-d177-4cb8-843e-342db931351e&quot;
+                      &quot;borrower_id&quot;:  &quot;240544528&quot;,
+                      &quot;borrower_name&quot;:  &quot;Siti Aminah&quot;,
+                      &quot;due_date&quot;:  &quot;2026-12-05&quot;,
+                      &quot;loan_id&quot;:  &quot;955eba62-9b78-46af-a1f1-2bb4b9d3237a&quot;
                   }
               ]
 }
 
---- 4. DynamoDB Table Status ---
+--- 4. Read by id (GET /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+{
+    &quot;item&quot;:  {
+                 &quot;quantity&quot;:  2,
+                 &quot;equipment_name&quot;:  &quot;Digital Multimeter Fluke 117&quot;,
+                 &quot;borrowed_at&quot;:  &quot;2026-11-26T14:50:01.634407+00:00&quot;,
+                 &quot;status&quot;:  &quot;BORROWED&quot;,
+                 &quot;borrower_id&quot;:  &quot;240544528&quot;,
+                 &quot;borrower_name&quot;:  &quot;Siti Aminah&quot;,
+                 &quot;due_date&quot;:  &quot;2026-12-05&quot;,
+                 &quot;loan_id&quot;:  &quot;955eba62-9b78-46af-a1f1-2bb4b9d3237a&quot;
+             }
+}
+
+--- 5. Update (RETURNED) (PUT /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+{
+    &quot;message&quot;:  &quot;Loan updated&quot;,
+    &quot;item&quot;:  {
+                 &quot;due_date&quot;:  &quot;2026-12-05&quot;,
+                 &quot;borrowed_at&quot;:  &quot;2026-11-26T14:50:01.634407+00:00&quot;,
+                 &quot;status&quot;:  &quot;RETURNED&quot;,
+                 &quot;borrower_id&quot;:  &quot;240544528&quot;,
+                 &quot;loan_id&quot;:  &quot;955eba62-9b78-46af-a1f1-2bb4b9d3237a&quot;,
+                 &quot;returned_at&quot;:  &quot;2026-11-26T14:50:02.853727+00:00&quot;,
+                 &quot;equipment_name&quot;:  &quot;Digital Multimeter Fluke 117&quot;,
+                 &quot;quantity&quot;:  2,
+                 &quot;borrower_name&quot;:  &quot;Siti Aminah&quot;
+             }
+}
+
+--- 6. Delete (DELETE /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+{
+    &quot;message&quot;:  &quot;Loan deleted&quot;,
+    &quot;loan_id&quot;:  &quot;955eba62-9b78-46af-a1f1-2bb4b9d3237a&quot;
+}
+
+--- 7. Read by id setelah delete (404) (GET /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+HTTP 404 : {&quot;error&quot;: &quot;Loan not found&quot;, &quot;loan_id&quot;: &quot;955eba62-9b78-46af-a1f1-2bb4b9d3237a&quot;}
+
+--- 8. DynamoDB table status ---
 {
     &quot;Name&quot;: &quot;equipment-loans&quot;,
     &quot;Status&quot;: &quot;ACTIVE&quot;,
     &quot;ItemCount&quot;: 0
-}
-</pre>
+}</pre>
+<h3>Bukti 9. Pembatasan API Gateway pada Sandbox</h3>
+<p>Output AWS CLI saat mencoba membuat HTTP API di Learner Lab yang membuktikan alasan teknis pemilihan Lambda Function URL:</p>
+<pre>$ aws apigatewayv2 create-api --name &quot;equipment-loans-http-api&quot; --protocol-type HTTP --region us-east-1
+An error occurred (AccessDeniedException) when calling the CreateApi operation:
+User: arn:aws:sts::562544635771:assumed-role/voclabs/user5518932=juanchristopherreinaldosipayung@mail.ugm.ac.id
+is not authorized to perform: apigateway:POST on resource: arn:aws:apigateway:us-east-1::/apis
+because no identity-based policy allows the apigateway:POST action</pre>
 </body></html>

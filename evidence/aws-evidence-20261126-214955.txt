@@ -1,0 +1,112 @@
+﻿=== AWS LEARNER LAB EVIDENCE (20261126-214955) ===
+Invoke URL : https://77rrmmovdyzjfo7wajyowsvwcm0dmyus.lambda-url.us-east-1.on.aws
+
+--- 1. Health check (GET /health) ---
+{
+    "status":  "ok",
+    "table":  "equipment-loans",
+    "table_status":  "ACTIVE"
+}
+
+--- 2a. Create sample tetap (POST /loans) ---
+{
+    "message":  "Loan created",
+    "item":  {
+                 "loan_id":  "9a9b8f20-1fed-49e8-9b49-49b7aceb179e",
+                 "borrower_name":  "Budi Santoso",
+                 "borrower_id":  "220123456",
+                 "equipment_name":  "Oscilloscope Rigol DS1054Z",
+                 "quantity":  1,
+                 "status":  "BORROWED",
+                 "borrowed_at":  "2026-11-26T14:50:01.051205+00:00",
+                 "due_date":  "2026-12-03"
+             }
+}
+
+--- 2b. Create untuk siklus CRUD (POST /loans) ---
+{
+    "message":  "Loan created",
+    "item":  {
+                 "loan_id":  "955eba62-9b78-46af-a1f1-2bb4b9d3237a",
+                 "borrower_name":  "Siti Aminah",
+                 "borrower_id":  "240544528",
+                 "equipment_name":  "Digital Multimeter Fluke 117",
+                 "quantity":  2,
+                 "status":  "BORROWED",
+                 "borrowed_at":  "2026-11-26T14:50:01.634407+00:00",
+                 "due_date":  "2026-12-05"
+             }
+}
+
+--- 3. Read list (GET /loans) ---
+{
+    "count":  2,
+    "items":  [
+                  {
+                      "quantity":  1,
+                      "equipment_name":  "Oscilloscope Rigol DS1054Z",
+                      "borrowed_at":  "2026-11-26T14:50:01.051205+00:00",
+                      "status":  "BORROWED",
+                      "borrower_id":  "220123456",
+                      "borrower_name":  "Budi Santoso",
+                      "due_date":  "2026-12-03",
+                      "loan_id":  "9a9b8f20-1fed-49e8-9b49-49b7aceb179e"
+                  },
+                  {
+                      "quantity":  2,
+                      "equipment_name":  "Digital Multimeter Fluke 117",
+                      "borrowed_at":  "2026-11-26T14:50:01.634407+00:00",
+                      "status":  "BORROWED",
+                      "borrower_id":  "240544528",
+                      "borrower_name":  "Siti Aminah",
+                      "due_date":  "2026-12-05",
+                      "loan_id":  "955eba62-9b78-46af-a1f1-2bb4b9d3237a"
+                  }
+              ]
+}
+
+--- 4. Read by id (GET /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+{
+    "item":  {
+                 "quantity":  2,
+                 "equipment_name":  "Digital Multimeter Fluke 117",
+                 "borrowed_at":  "2026-11-26T14:50:01.634407+00:00",
+                 "status":  "BORROWED",
+                 "borrower_id":  "240544528",
+                 "borrower_name":  "Siti Aminah",
+                 "due_date":  "2026-12-05",
+                 "loan_id":  "955eba62-9b78-46af-a1f1-2bb4b9d3237a"
+             }
+}
+
+--- 5. Update (RETURNED) (PUT /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+{
+    "message":  "Loan updated",
+    "item":  {
+                 "due_date":  "2026-12-05",
+                 "borrowed_at":  "2026-11-26T14:50:01.634407+00:00",
+                 "status":  "RETURNED",
+                 "borrower_id":  "240544528",
+                 "loan_id":  "955eba62-9b78-46af-a1f1-2bb4b9d3237a",
+                 "returned_at":  "2026-11-26T14:50:02.853727+00:00",
+                 "equipment_name":  "Digital Multimeter Fluke 117",
+                 "quantity":  2,
+                 "borrower_name":  "Siti Aminah"
+             }
+}
+
+--- 6. Delete (DELETE /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+{
+    "message":  "Loan deleted",
+    "loan_id":  "955eba62-9b78-46af-a1f1-2bb4b9d3237a"
+}
+
+--- 7. Read by id setelah delete (404) (GET /loans/955eba62-9b78-46af-a1f1-2bb4b9d3237a) ---
+HTTP 404 : {"error": "Loan not found", "loan_id": "955eba62-9b78-46af-a1f1-2bb4b9d3237a"}
+
+--- 8. DynamoDB table status ---
+{
+    "Name": "equipment-loans",
+    "Status": "ACTIVE",
+    "ItemCount": 0
+}

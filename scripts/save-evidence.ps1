@@ -44,7 +44,25 @@ function Add-Step($Title, $Method, $Path, $Body = $null) {
         $script:Log += ($Res | ConvertTo-Json -Depth 6)
         return $Res
     } catch {
-        $script:Log += "ERROR: $($_.Exception.Message)"
+        $StatusCode = $null
+        if ($_.Exception.Response) {
+            $StatusCode = [int]$_.Exception.Response.StatusCode
+        }
+        $ErrBody = $null
+        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+            $ErrBody = $_.ErrorDetails.Message
+        } elseif ($_.Exception.Response) {
+            try {
+                $Reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $ErrBody = $Reader.ReadToEnd()
+                $Reader.Close()
+            } catch {}
+        }
+        if ($StatusCode -and $ErrBody) {
+            $script:Log += "HTTP $StatusCode : $ErrBody"
+        } else {
+            $script:Log += "ERROR: $($_.Exception.Message)"
+        }
         return $null
     }
     finally { $script:Log += "" }
@@ -56,13 +74,22 @@ $Log += ""
 
 Add-Step "1. Health check" GET "/health" | Out-Null
 
-$Create = Add-Step "2. Create" POST "/loans" @{
+Add-Step "2a. Create sample tetap" POST "/loans" @{
     borrower_name  = "Budi Santoso"
     borrower_id    = "220123456"
     equipment_name = "Oscilloscope Rigol DS1054Z"
     quantity       = 1
     due_date       = "2026-12-03"
+} | Out-Null
+
+$Create = Add-Step "2b. Create untuk siklus CRUD" POST "/loans" @{
+    borrower_name  = "Siti Aminah"
+    borrower_id    = "240544528"
+    equipment_name = "Digital Multimeter Fluke 117"
+    quantity       = 2
+    due_date       = "2026-12-05"
 }
+
 Add-Step "3. Read list" GET "/loans" | Out-Null
 
 if ($Create -and $Create.item.loan_id) {
@@ -70,7 +97,7 @@ if ($Create -and $Create.item.loan_id) {
     Add-Step "4. Read by id" GET "/loans/$Id" | Out-Null
     Add-Step "5. Update (RETURNED)" PUT "/loans/$Id" @{ status = "RETURNED" } | Out-Null
     Add-Step "6. Delete" DELETE "/loans/$Id" | Out-Null
-    Add-Step "7. Read by id setelah delete (harus 404)" GET "/loans/$Id" | Out-Null
+    Add-Step "7. Read by id setelah delete (404)" GET "/loans/$Id" | Out-Null
 } else {
     $Log += "CREATE gagal, uji GET by id / PUT / DELETE dilewati."
 }
