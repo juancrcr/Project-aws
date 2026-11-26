@@ -9,8 +9,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+try:
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+except ImportError:  # Allows running offline unit tests without boto3 installed locally
+    boto3 = None  # type: ignore[assignment]
+    BotoCoreError = Exception  # type: ignore[misc,assignment]
+    ClientError = Exception  # type: ignore[misc,assignment]
 
 TABLE_NAME = os.environ.get("TABLE_NAME", "equipment-loans")
 VALID_STATUSES = {"BORROWED", "RETURNED"}
@@ -30,6 +35,8 @@ def _get_table(table_override: Any = None) -> Any:
     if table_override is not None:
         return table_override
     global _dynamodb_resource
+    if boto3 is None:
+        raise RuntimeError("boto3 is required when running against AWS DynamoDB")
     if _dynamodb_resource is None:
         _dynamodb_resource = boto3.resource("dynamodb")
     return _dynamodb_resource.Table(TABLE_NAME)
