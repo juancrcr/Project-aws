@@ -1,0 +1,150 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Laporan Week 12</title>
+<style>
+@page{size:A4;margin:18mm 16mm}
+body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.4;color:#111}
+h1{font-size:19pt;margin:0 0 4px}h2{font-size:14pt;margin:18px 0 6px;border-bottom:1px solid #999;padding-bottom:2px}h3{font-size:12pt;margin:12px 0 4px}
+table{border-collapse:collapse;width:100%;margin:6px 0;font-size:10pt}td,th{border:1px solid #888;padding:3px 6px;text-align:left;vertical-align:top}th{background:#eee}
+.meta td{border:none;padding:1px 6px 1px 0}.meta td:first-child{font-weight:bold;width:90px}
+img{max-width:100%;display:block;margin:6px auto}figure{margin:10px 0;page-break-inside:avoid}figcaption{font-size:10pt}
+pre{background:#f4f4f4;border:1px solid #ccc;padding:6px;font-size:8pt;white-space:pre-wrap;word-break:break-all}
+code{font-family:Consolas,monospace;font-size:10pt}
+</style></head><body>
+<h1>Laporan Proyek Week 12: Design dan AWS Setup</h1>
+<table class="meta">
+<tr><td>Nama</td><td>Juan Christopher Reinaldo Sipayung (24/544528/TK/60526)</td></tr>
+<tr><td>Mata Kuliah</td><td>AWS Cloud Computing</td></tr>
+<tr><td>Proyek</td><td>Equipment Loans API, sistem peminjaman alat laboratorium</td></tr>
+<tr><td>Track</td><td>Track C Serverless: Lambda Function URL, AWS Lambda, dan Amazon DynamoDB</td></tr>
+<tr><td>Region</td><td>us-east-1 (AWS Learner Lab)</td></tr>
+<tr><td>Repository</td><td>https://github.com/juancrcr/Project-aws</td></tr>
+</table>
+
+<h2>1. Architecture Diagram</h2>
+<figure><img src="../arsitektur-equipment-loans.drawio.png"><figcaption>Gambar 1. Arsitektur Equipment Loans API (Draw.io).</figcaption></figure>
+<p>Alur pada diagram:</p>
+<ol>
+<li>Client mengirim request HTTPS ke Lambda Function URL. Function URL dipakai sebagai endpoint publik karena policy sandbox <code>voclabs</code> membatasi <code>apigateway:POST</code>, sehingga API Gateway tidak dapat dibuat.</li>
+<li>Function URL meneruskan request sebagai event format v2.0 ke Lambda <code>equipment-loans-api</code>, yang melakukan routing untuk <code>/health</code> dan operasi CRUD <code>/loans</code>.</li>
+<li>Lambda memakai execution role <code>LabRole</code> yang memiliki akses <code>dynamodb:*</code> di us-east-1. Saat <code>/health</code> dipanggil pertama kali, Lambda membuat tabel DynamoDB <code>equipment-loans</code> secara otomatis.</li>
+<li>Lambda membaca dan menulis item melalui boto3 dengan enkripsi TLS, lalu mengembalikan respons JSON ke client.</li>
+<li>Log eksekusi dikirim ke CloudWatch Logs pada grup <code>/aws/lambda/equipment-loans-api</code>.</li>
+</ol>
+<h3>Keamanan dan Jaringan</h3>
+<ul>
+<li>Seluruh komunikasi memakai HTTPS atau TLS dan berjalan di jaringan terkelola AWS, sehingga tidak diperlukan konfigurasi VPC atau Security Group manual.</li>
+<li>Akses ke DynamoDB dan CloudWatch Logs diberikan lewat IAM role <code>LabRole</code>, tanpa kredensial yang ditanam di kode.</li>
+<li>Function URL memakai auth type <code>NONE</code> dan CORS <code>*</code> agar mudah diuji di sandbox. Risikonya: endpoint dapat diakses siapa saja yang mengetahui URL-nya. Pada tahap berikutnya autentikasi akan ditambahkan (auth type <code>AWS_IAM</code> atau API Gateway dengan authorizer) dan CORS dibatasi.</li>
+</ul>
+
+<h2>2. Design Brief</h2>
+<h3>Use Case dan Track</h3>
+<p>Sistem mencatat peminjaman alat laboratorium seperti oscilloscope, multimeter, dan perangkat jaringan melalui endpoint HTTP. Track C Serverless dipilih karena setup cepat untuk sesi sandbox 3 jam, biaya rendah dengan skema bayar sesuai pemakaian, dan tidak memerlukan konfigurasi VPC atau RDS manual.</p>
+<h3>Data Entity: EquipmentLoan</h3>
+<p>Data disimpan pada tabel DynamoDB <code>equipment-loans</code> (partition key <code>loan_id</code>, mode On-demand).</p>
+<table><tr><th>Atribut</th><th>Tipe</th><th>Keterangan</th></tr>
+<tr><td>loan_id</td><td>String</td><td>Partition key, UUID v4 yang dibuat otomatis saat POST</td></tr>
+<tr><td>borrower_name</td><td>String</td><td>Nama peminjam</td></tr>
+<tr><td>borrower_id</td><td>String</td><td>NIM atau ID peminjam</td></tr>
+<tr><td>equipment_name</td><td>String</td><td>Nama alat</td></tr>
+<tr><td>quantity</td><td>Number</td><td>Jumlah unit, minimal 1</td></tr>
+<tr><td>status</td><td>String</td><td>BORROWED saat dibuat, RETURNED saat dikembalikan</td></tr>
+<tr><td>borrowed_at</td><td>String</td><td>Waktu pinjam, ISO 8601 UTC</td></tr>
+<tr><td>due_date</td><td>String</td><td>Batas tanggal kembali, YYYY-MM-DD</td></tr>
+<tr><td>returned_at</td><td>String</td><td>Terisi otomatis saat status menjadi RETURNED</td></tr></table>
+<h3>Endpoint CRUD dan Health Check</h3>
+<table><tr><th>Method</th><th>Path</th><th>Operasi</th><th>Fungsi</th></tr>
+<tr><td>GET</td><td>/health</td><td>Health Check</td><td>Cek status Lambda dan tabel DynamoDB</td></tr>
+<tr><td>POST</td><td>/loans</td><td>Create</td><td>Catat peminjaman alat baru, respons 201</td></tr>
+<tr><td>GET</td><td>/loans</td><td>Read (list)</td><td>Ambil semua data peminjaman</td></tr>
+<tr><td>GET</td><td>/loans/{loan_id}</td><td>Read (detail)</td><td>Ambil satu data berdasarkan loan_id</td></tr>
+<tr><td>PUT</td><td>/loans/{loan_id}</td><td>Update</td><td>Ubah status, due_date, atau quantity; returned_at terisi otomatis saat status RETURNED</td></tr>
+<tr><td>DELETE</td><td>/loans/{loan_id}</td><td>Delete</td><td>Hapus data peminjaman</td></tr></table>
+
+<h2>3. Git Repository dan Deployment Plan</h2>
+<p>Repository: https://github.com/juancrcr/Project-aws, dengan riwayat commit bertahap. Isi utama:</p>
+<ul>
+<li><code>README.md</code>: komponen, daftar endpoint, struktur repo, dan cara deploy.</li>
+<li><code>src/lambda_function.py</code>: handler Lambda untuk CRUD dan health check.</li>
+<li><code>src/local_test.py</code>: unit test offline, 3 dari 3 test lulus (health check, siklus CRUD penuh, validasi input).</li>
+<li><code>scripts/</code>: <code>setup-aws.ps1</code>, <code>setup-aws.sh</code> (deploy) dan <code>save-evidence.ps1</code> (uji CRUD live dan backup).</li>
+<li><code>docs/</code>: diagram arsitektur dan laporan ini. <code>evidence/</code>: output uji, backup DynamoDB, dan screenshot.</li>
+</ul>
+<p>Deployment plan setiap sandbox reset:</p>
+<ol>
+<li>Start Learner Lab, lalu salin kredensial dari menu AWS Details ke terminal.</li>
+<li>Jalankan <code>scripts/setup-aws.ps1</code> untuk mengemas kode, membuat atau memperbarui Lambda <code>equipment-loans-api</code> dengan <code>LabRole</code>, mengaktifkan Function URL, dan memanggil <code>/health</code>. Panggilan pertama membuat tabel DynamoDB <code>equipment-loans</code>.</li>
+<li>Jalankan <code>scripts/save-evidence.ps1</code> untuk menguji <code>/health</code> dan seluruh CRUD, lalu menyimpan hasil dan backup tabel ke folder <code>evidence</code>.</li>
+<li>Ulangi langkah 1 sampai 3 setiap sandbox reset (sekitar 3 jam). Function URL berubah ketika Lambda dibuat ulang.</li>
+</ol>
+
+<h2>4. AWS Evidence</h2>
+<p>Pengujian live dilakukan pada AWS Learner Lab, region us-east-1, endpoint <code>https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws</code>.</p>
+<figure><img src="../../evidence/screenshots/01-dynamodb-table.png"><figcaption><b>Bukti 1. Tabel DynamoDB.</b> Tabel <code>equipment-loans</code> berstatus Active, partition key <code>loan_id</code> (String), mode On-demand. Item count 0 karena DynamoDB memperbarui hitungan sekitar setiap 6 jam; jumlah item sebenarnya terlihat pada Bukti 2.</figcaption></figure>
+<figure><img src="../../evidence/screenshots/02-dynamodb-explore-items.png"><figcaption><b>Bukti 2. Explore items.</b> Tabel menampilkan 2 item peminjaman yang berhasil tersimpan.</figcaption></figure>
+<figure><img src="../../evidence/screenshots/03-lambda-overview.png"><figcaption><b>Bukti 3. Overview Lambda.</b> Function ARN, Function URL, dan execution role LabRole.</figcaption></figure>
+<figure><img src="../../evidence/screenshots/04-lambda-permissions.png"><figcaption><b>Bukti 4. Permissions Lambda.</b> Tab Configuration &gt; Permissions menunjukkan LabRole sebagai execution role aktif.</figcaption></figure>
+<figure><img src="../../evidence/screenshots/05-iam-labrole.png"><figcaption><b>Bukti 5. IAM Role LabRole.</b> 4 policy terpasang. Akses ke DynamoDB terbukti secara fungsional karena Lambda berhasil membuat tabel dan menyimpan item (Bukti 1, 2, dan 7).</figcaption></figure>
+<figure><img src="../../evidence/screenshots/06-lambda-test-health.png"><figcaption><b>Bukti 6. Test health check.</b> Tab Test di konsol Lambda: eksekusi <code>/health</code> berhasil, statusCode 200, table_status ACTIVE.</figcaption></figure>
+<figure><img src="../../evidence/screenshots/07-browser-get-loans.png"><figcaption><b>Bukti 7. Akses endpoint dari browser.</b> Akses langsung <code>/loans</code> menampilkan JSON dengan 2 item peminjaman.</figcaption></figure>
+<h3>Bukti 8. Output uji live (teks)</h3>
+<p>Isi lengkap file <code>evidence/aws-evidence-20261126-120628.txt</code>:</p>
+<pre>=== AWS SANDBOX EVIDENCE (20261126-120628) ===
+Invoke URL : https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws
+
+--- 1. GET /health ---
+{
+    &quot;status&quot;:  &quot;ok&quot;,
+    &quot;table&quot;:  &quot;equipment-loans&quot;,
+    &quot;table_status&quot;:  &quot;ACTIVE&quot;
+}
+
+--- 2. POST /loans (Create Sample) ---
+{
+    &quot;message&quot;:  &quot;Loan created&quot;,
+    &quot;item&quot;:  {
+                 &quot;loan_id&quot;:  &quot;b9b732d8-7f39-4572-b43e-56bb7f570d3b&quot;,
+                 &quot;borrower_name&quot;:  &quot;Budi Santoso&quot;,
+                 &quot;borrower_id&quot;:  &quot;220123456&quot;,
+                 &quot;equipment_name&quot;:  &quot;Oscilloscope Rigol DS1054Z&quot;,
+                 &quot;quantity&quot;:  1,
+                 &quot;status&quot;:  &quot;BORROWED&quot;,
+                 &quot;borrowed_at&quot;:  &quot;2026-11-26T05:06:34.844083+00:00&quot;,
+                 &quot;due_date&quot;:  &quot;2026-12-03&quot;
+             }
+}
+
+--- 3. GET /loans (List) ---
+{
+    &quot;count&quot;:  2,
+    &quot;items&quot;:  [
+                  {
+                      &quot;quantity&quot;:  1,
+                      &quot;equipment_name&quot;:  &quot;Oscilloscope Rigol DS1054Z&quot;,
+                      &quot;borrowed_at&quot;:  &quot;2026-11-26T05:06:34.844083+00:00&quot;,
+                      &quot;status&quot;:  &quot;BORROWED&quot;,
+                      &quot;borrower_id&quot;:  &quot;220123456&quot;,
+                      &quot;borrower_name&quot;:  &quot;Budi Santoso&quot;,
+                      &quot;due_date&quot;:  &quot;2026-12-03&quot;,
+                      &quot;loan_id&quot;:  &quot;b9b732d8-7f39-4572-b43e-56bb7f570d3b&quot;
+                  },
+                  {
+                      &quot;quantity&quot;:  1,
+                      &quot;equipment_name&quot;:  &quot;Oscilloscope Rigol DS1054Z&quot;,
+                      &quot;borrowed_at&quot;:  &quot;2026-11-26T05:05:50.848305+00:00&quot;,
+                      &quot;status&quot;:  &quot;BORROWED&quot;,
+                      &quot;borrower_id&quot;:  &quot;220123456&quot;,
+                      &quot;borrower_name&quot;:  &quot;Budi Santoso&quot;,
+                      &quot;due_date&quot;:  &quot;2026-12-03&quot;,
+                      &quot;loan_id&quot;:  &quot;d08c43dd-d177-4cb8-843e-342db931351e&quot;
+                  }
+              ]
+}
+
+--- 4. DynamoDB Table Status ---
+{
+    &quot;Name&quot;: &quot;equipment-loans&quot;,
+    &quot;Status&quot;: &quot;ACTIVE&quot;,
+    &quot;ItemCount&quot;: 0
+}
+</pre>
+</body></html>
