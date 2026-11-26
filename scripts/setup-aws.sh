@@ -22,14 +22,17 @@ echo "IAM Role   : $ROLE_ARN"
 echo ""
 echo "=== 2. Setup DynamoDB Table ($TABLE_NAME) ==="
 if ! aws dynamodb describe-table --table-name "$TABLE_NAME" --region "$REGION" >/dev/null 2>&1; then
-  echo "Membuat tabel DynamoDB '$TABLE_NAME'..."
-  aws dynamodb create-table \
+  echo "Mencoba membuat tabel DynamoDB '$TABLE_NAME'..."
+  if aws dynamodb create-table \
     --table-name "$TABLE_NAME" \
     --attribute-definitions AttributeName=loan_id,AttributeType=S \
     --key-schema AttributeName=loan_id,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
-    --region "$REGION" >/dev/null
-  aws dynamodb wait table-exists --table-name "$TABLE_NAME" --region "$REGION"
+    --region "$REGION" >/dev/null 2>&1; then
+    aws dynamodb wait table-exists --table-name "$TABLE_NAME" --region "$REGION"
+  else
+    echo "User voclabs tidak punya izin CreateTable langsung; tabel akan otomatis dibuat oleh Lambda (LabRole) saat /health dipanggil."
+  fi
 else
   echo "Tabel '$TABLE_NAME' sudah ada."
 fi

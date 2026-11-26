@@ -15,11 +15,19 @@ $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
 New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
 
-$ApiId = aws apigatewayv2 get-apis --region $Region --query "Items[?Name=='$ApiName'] | [0].ApiId" --output text
-if (-not $ApiId -or $ApiId -eq "None") {
-    throw "API '$ApiName' tidak ditemukan. Jalankan .\scripts\setup-aws.ps1 terlebih dahulu."
+$ErrorActionPreference = "Continue"
+$ApiId = aws apigatewayv2 get-apis --region $Region --query "Items[?Name=='$ApiName'] | [0].ApiId" --output text 2>$null
+if ($LASTEXITCODE -eq 0 -and $ApiId -and $ApiId -ne "None") {
+    $InvokeUrl = aws apigatewayv2 get-api --api-id $ApiId --region $Region --query "ApiEndpoint" --output text
+} else {
+    $InvokeUrl = aws lambda get-function-url-config --function-name "equipment-loans-api" --region $Region --query "FunctionUrl" --output text 2>$null
 }
-$InvokeUrl = aws apigatewayv2 get-api --api-id $ApiId --region $Region --query "ApiEndpoint" --output text
+$ErrorActionPreference = "Stop"
+
+if (-not $InvokeUrl -or $InvokeUrl -eq "None") {
+    throw "Endpoint tidak ditemukan. Jalankan .\scripts\setup-aws.ps1 terlebih dahulu."
+}
+$InvokeUrl = $InvokeUrl.TrimEnd("/")
 
 $ReportFile = Join-Path $EvidenceDir "aws-evidence-$Timestamp.txt"
 $BackupFile = Join-Path $EvidenceDir "dynamodb-backup-$Timestamp.json"

@@ -88,10 +88,28 @@ def _extract_route(event: dict[str, Any]) -> tuple[str, str]:
     return method, path.rstrip("/") or "/"
 
 
-def _handle_health(table: Any) -> dict[str, Any]:
-    """Verify Lambda execution and DynamoDB table connectivity."""
+def _ensure_table_exists(table: Any) -> str:
+    """Return table status, auto-creating the DynamoDB table if missing (useful in Vocareum labs)."""
     try:
-        status = table.table_status
+        return str(table.table_status)
+    except ClientError as exc:
+        err_code = exc.response.get("Error", {}).get("Code", "")
+        if err_code != "ResourceNotFoundException" or boto3 is None:
+            raise
+        created = boto3.resource("dynamodb").create_table(
+            TableName=TABLE_NAME,
+            AttributeDefinitions=[{"AttributeName": "loan_id", "AttributeType": "S"}],
+            KeySchema=[{"AttributeName": "loan_id", "KeyType": "HASH"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        created.wait_until_exists()
+        return str(created.table_status)
+
+
+def _handle_health(table: Any) -> dict[str, Any]:
+    """Verify Lambda execution and DynamoDB table connectivity (auto-creates table if needed)."""
+    try:
+        status = _ensure_table_exists(table)
     except (BotoCoreError, ClientError) as exc:
         return _response(503, {"status": "unhealthy", "table": TABLE_NAME, "detail": str(exc)})
     return _response(200, {"status": "ok", "table": TABLE_NAME, "table_status": status})

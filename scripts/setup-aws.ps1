@@ -31,15 +31,23 @@ $TableExists = ($LASTEXITCODE -eq 0)
 $ErrorActionPreference = "Stop"
 
 if (-not $TableExists) {
-    Write-Host "Membuat tabel DynamoDB '$TableName'..."
+    Write-Host "Mencoba membuat tabel DynamoDB '$TableName'..."
+    $ErrorActionPreference = "Continue"
     aws dynamodb create-table `
         --table-name $TableName `
         --attribute-definitions AttributeName=loan_id,AttributeType=S `
         --key-schema AttributeName=loan_id,KeyType=HASH `
         --billing-mode PAY_PER_REQUEST `
-        --region $Region | Out-Null
-    Write-Host "Menunggu tabel aktif..."
-    aws dynamodb wait table-exists --table-name $TableName --region $Region
+        --region $Region 2>$null | Out-Null
+    $CreateOk = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = "Stop"
+
+    if ($CreateOk) {
+        Write-Host "Menunggu tabel aktif..."
+        aws dynamodb wait table-exists --table-name $TableName --region $Region
+    } else {
+        Write-Host "User voclabs tidak punya izin CreateTable langsung; tabel akan otomatis dibuat oleh Lambda (LabRole) saat /health dipanggil." -ForegroundColor Yellow
+    }
 } else {
     Write-Host "Tabel '$TableName' sudah ada."
 }
@@ -61,7 +69,7 @@ if (-not $FuncExists) {
         --handler lambda_function.lambda_handler `
         --zip-file "fileb://$ZipPath" `
         --environment "Variables={TABLE_NAME=$TableName}" `
-        --timeout 15 `
+        --timeout 30 `
         --region $Region | Out-Null
     aws lambda wait function-active-v2 --function-name $FunctionName --region $Region
 } else {
@@ -76,61 +84,48 @@ if (-not $FuncExists) {
 $LambdaArn = aws lambda get-function --function-name $FunctionName --region $Region --query "Configuration.FunctionArn" --output text
 Write-Host "Lambda ARN : $LambdaArn"
 
-Write-Host "`n=== 4. Setup API Gateway HTTP API ($ApiName) ===" -ForegroundColor Cyan
-$ApiId = aws apigatewayv2 get-apis --region $Region --query "Items[?Name=='$ApiName'] | [0].ApiId" --output text
+Write-Host "`n=== 4. Setup Endpoint Publik (API Gateway / Lambda Function URL) ===" -ForegroundColor Cyan
+$InvokeUrl = ""
+
+$ErrorActionPreference = "Continue"
+$ApiId = aws apigatewayv2 get-apis --region $Region --query "Items[?Name=='$ApiName'] | [0].ApiId" --output text 2>$null
 if (-not $ApiId -or $ApiId -eq "None") {
-    Write-Host "Membuat HTTP API '$ApiName'..."
     $ApiId = aws apigatewayv2 create-api `
         --name $ApiName `
         --protocol-type HTTP `
         --region $Region `
-        --query "ApiId" --output text
-
-    $IntegrationId = aws apigatewayv2 create-integration `
-        --api-id $ApiId `
-        --integration-type AWS_PROXY `
-        --integration-uri $LambdaArn `
-        --payload-format-version "2.0" `
-        --region $Region `
-        --query "IntegrationId" --output text
-
-    $Routes = @(
-        "GET /health",
-        "POST /loans",
-        "GET /loans",
-        "GET /loans/{loan_id}",
-        "PUT /loans/{loan_id}",
-        "DELETE /loans/{loan_id}"
-    )
-    foreach ($RouteKey in $Routes) {
-        Write-Host "  Menambahkan route: $RouteKey"
-        aws apigatewayv2 create-route `
+        --query "ApiId" --output text 2>$null
+    if ($LASTEXITCODE -eq 0 -and $ApiId -and $ApiId -ne "None") {
+        $IntegrationId = aws apigatewayv2 create-integration `
             --api-id $ApiId `
-            --route-key $RouteKey `
-            --target "integrations/$IntegrationId" `
-            --region $Region | Out-Null
+            --integration-type AWS_PROXY `
+            --integration-uri $LambdaArn `
+            --payload-format-version "2.0" `
+            --region $Region `
+            --query "IntegrationId" --output text
+        foreach ($RouteKey in @("GET /health","POST /loans","GET /loans","GET /loans/{loan_id}","PUT /loans/{loan_id}","DELETE /loans/{loan_id}")) {
+            aws apigatewayv2 create-route --api-id $ApiId --route-key $RouteKey --target "integrations/$IntegrationId" --region $Region | Out-Null
+        }
+        aws apigatewayv2 create-stage --api-id $ApiId --stage-name '$default' --auto-deploy --region $Region | Out-Null
+        aws lambda add-permission --function-name $FunctionName --statement-id "apigateway-invoke-$ApiId" --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/*" --region $Region *> $null
+        $InvokeUrl = aws apigatewayv2 get-api --api-id $ApiId --region $Region --query "ApiEndpoint" --output text
     }
-
-    aws apigatewayv2 create-stage `
-        --api-id $ApiId `
-        --stage-name '$default' `
-        --auto-deploy `
-        --region $Region | Out-Null
 } else {
-    Write-Host "HTTP API '$ApiName' sudah ada (ApiId: $ApiId)."
+    $InvokeUrl = aws apigatewayv2 get-api --api-id $ApiId --region $Region --query "ApiEndpoint" --output text
 }
 
-$ErrorActionPreference = "Continue"
-aws lambda add-permission `
-    --function-name $FunctionName `
-    --statement-id "apigateway-invoke-$ApiId" `
-    --action lambda:InvokeFunction `
-    --principal apigateway.amazonaws.com `
-    --source-arn "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/*" `
-    --region $Region *> $null
+if (-not $InvokeUrl) {
+    Write-Host "API Gateway tidak diizinkan oleh sandbox; menggunakan Lambda Function URL..." -ForegroundColor Yellow
+    $InvokeUrl = aws lambda get-function-url-config --function-name $FunctionName --region $Region --query "FunctionUrl" --output text 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $InvokeUrl) {
+        $InvokeUrl = aws lambda create-function-url-config --function-name $FunctionName --auth-type NONE --region $Region --query "FunctionUrl" --output text
+    }
+    aws lambda add-permission --function-name $FunctionName --statement-id "FunctionURLAllowPublicAccess" --action lambda:InvokeFunctionUrl --principal "*" --function-url-auth-type NONE --region $Region *> $null
+    aws lambda add-permission --function-name $FunctionName --statement-id "FunctionURLAllowInvokeFunction" --action lambda:InvokeFunction --principal "*" --invoked-via-function-url --region $Region *> $null
+}
 $ErrorActionPreference = "Stop"
 
-$InvokeUrl = aws apigatewayv2 get-api --api-id $ApiId --region $Region --query "ApiEndpoint" --output text
+$InvokeUrl = $InvokeUrl.TrimEnd("/")
 Write-Host "`n=== SETUP SELESAI ===" -ForegroundColor Green
 Write-Host "Invoke URL : $InvokeUrl" -ForegroundColor Yellow
 
