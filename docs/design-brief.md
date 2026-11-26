@@ -1,43 +1,36 @@
-# Design Brief — Sistem Peminjaman Alat Lab (Equipment Loans)
+# Design Brief: Sistem Peminjaman Alat Lab
 
-**Mata Kuliah:** AWS Cloud Computing — Individual Project (Week 12)  
-**Track Terpilih:** Track C | Serverless (`AWS Lambda Function URL` + `AWS Lambda` + `Amazon DynamoDB`)  
-**Use Case:** Equipment Loans (Manajemen Peminjaman Alat Laboratorium/Kampus)
+Mata Kuliah: AWS Cloud Computing Week 12
+Track: Track C Serverless dengan Lambda Function URL, AWS Lambda, dan Amazon DynamoDB
+Use Case: Equipment Loans
 
----
+## 1. Latar Belakang
+Peminjaman alat laboratorium seperti oscilloscope, multimeter, dan perangkat jaringan sering masih dicatat manual di spreadsheet. Sistem Equipment Loans API menyediakan endpoint HTTP untuk mencatat peminjaman baru, melihat daftar peminjaman, memperbarui status pengembalian, dan menghapus data.
 
-## 1. Latar Belakang & Use Case
-Laboratorium kampus atau unit inventaris sering kali masih mencatat peminjaman alat (seperti oscilloscope, multimeter, router, kamera, atau proyektor) secara manual menggunakan spreadsheet atau buku log. Hal ini menyulitkan pelacakan status alat yang sedang dipinjam, siapa peminjamnya, dan kapan alat harus dikembalikan.
-
-Aplikasi **Equipment Loans API** menyediakan backend berbasis REST/HTTP API yang ringan untuk mencatat peminjaman baru, melihat daftar peminjaman aktif, memperbarui status saat alat dikembalikan, serta menghapus data uji/tidak valid.
-
-## 2. Alasan Pemilihan Track C (Serverless)
-1. **Efisien untuk AWS Learner Lab / Sandbox (3 Jam):** Tidak memerlukan waktu tunggu provisioning database relasional (RDS) maupun konfigurasi VPC/Security Group/SSH seperti pada Track A/B, serta dapat di-deploy ulang otomatis dalam hitungan detik saat sesi sandbox reset.
-2. **Hemat Kredit & Auto-Scaling:** Lambda Function URL, Lambda, dan DynamoDB (`PAY_PER_REQUEST`) hanya mengenakan biaya saat ada request masuk (*pay-per-use*), sehingga sangat aman terhadap batas kredit AWS Learner Lab.
-3. **Kesesuaian IAM Sandbox (`LabRole` & Lambda Function URL):** Pada sandbox `voclabs`, izin `apigateway:POST` dan `dynamodb:CreateTable` langsung oleh user dibatasi. Oleh karena itu, arsitektur ini memanfaatkan **Lambda Function URL** sebagai HTTPS endpoint publik (pengganti API Gateway yang kompatibel dengan event format v2.0) dan **`LabRole`** pada Lambda agar Lambda dapat membuat serta mengakses tabel DynamoDB secara otomatis di `us-east-1`.
+## 2. Alasan Memilih Track C Serverless
+1. Setup cepat di AWS Sandbox yang memiliki batas waktu 3 jam karena tidak perlu menunggu provisioning RDS atau konfigurasi VPC dan SSH.
+2. Biaya ringan karena Lambda Function URL, Lambda, dan DynamoDB On Demand hanya dihitung saat ada request.
+3. Cocok dengan aturan IAM sandbox. Role `voclabs` tidak diizinkan memanggil `apigateway:POST` dan `dynamodb:CreateTable` secara langsung, sedangkan Lambda dengan `LabRole` memiliki akses penuh DynamoDB di `us-east-1` dan dapat diakses melalui Lambda Function URL.
 
 ## 3. Data Entity: `EquipmentLoan`
-Sistem menggunakan **1 entitas utama** yang disimpan pada tabel Amazon DynamoDB bernama `equipment-loans`.
+Data disimpan pada tabel DynamoDB `equipment-loans` dengan rincian atribut:
 
-| Atribut | Tipe Data | Keterangan | Wajib |
-|---|---|---|---|
-| `loan_id` | `String` | **Partition Key** (UUID v4, di-generate otomatis saat `POST`) | Ya |
-| `borrower_name` | `String` | Nama lengkap peminjam | Ya |
-| `borrower_id` | `String` | NIM / NIP / ID peminjam | Ya |
-| `equipment_name` | `String` | Nama alat yang dipinjam | Ya |
-| `quantity` | `Number` | Jumlah unit yang dipinjam (minimal `1`) | Ya |
-| `status` | `String` | Status peminjaman: `BORROWED` (default) atau `RETURNED` | Ya |
-| `borrowed_at` | `String` | Timestamp waktu pinjam (ISO-8601 UTC) | Ya |
-| `due_date` | `String` | Target tanggal pengembalian (`YYYY-MM-DD`) | Ya |
-| `returned_at` | `String` | Timestamp pengembalian (diisi otomatis saat status menjadi `RETURNED`) | Tidak |
+| Atribut | Tipe Data | Keterangan |
+|---|---|---|
+| `loan_id` | `String` | Partition Key berupa UUID v4 yang dibuat otomatis saat `POST` |
+| `borrower_name` | `String` | Nama lengkap peminjam |
+| `borrower_id` | `String` | NIM atau ID peminjam |
+| `equipment_name` | `String` | Nama alat yang dipinjam |
+| `quantity` | `Number` | Jumlah unit minimal 1 |
+| `status` | `String` | `BORROWED` saat dibuat atau `RETURNED` saat dikembalikan |
+| `borrowed_at` | `String` | Waktu pinjam format ISO 8601 UTC |
+| `due_date` | `String` | Batas tanggal kembali format `YYYY-MM-DD` |
+| `returned_at` | `String` | Waktu kembali yang terisi otomatis saat status menjadi `RETURNED` |
 
-## 4. Spesifikasi 4 CRUD Endpoints (+ Health Check)
+## 4. Spesifikasi Endpoint CRUD
 
-Selain endpoint `GET /health` untuk verifikasi konektivitas awal, sistem menyediakan 4 operasi CRUD utama:
-
-### 1) Create — `POST /loans`
-Mencatat transaksi peminjaman alat baru.
-- **Request Body:**
+### 1. Create: `POST /loans`
+Mencatat peminjaman alat baru dan mengembalikan status `201`.
 ```json
 {
   "borrower_name": "Budi Santoso",
@@ -47,17 +40,15 @@ Mencatat transaksi peminjaman alat baru.
   "due_date": "2026-12-03"
 }
 ```
-- **Response (`201 Created`):** Mengembalikan objek `EquipmentLoan` lengkap dengan `loan_id`, `status: "BORROWED"`, dan `borrowed_at`.
 
-### 2) Read — `GET /loans` & `GET /loans/{loan_id}`
-Mengambil seluruh daftar peminjaman (`GET /loans`) atau detail satu transaksi berdasarkan `loan_id` (`GET /loans/{loan_id}`).
-- **Response (`200 OK`):**
+### 2. Read: `GET /loans` dan `GET /loans/{loan_id}`
+Mengambil semua data peminjaman atau satu data berdasarkan `loan_id` dengan status `200`.
 ```json
 {
   "count": 1,
   "items": [
     {
-      "loan_id": "a1b2c3d4-...",
+      "loan_id": "a1b2c3d4",
       "borrower_name": "Budi Santoso",
       "borrower_id": "220123456",
       "equipment_name": "Oscilloscope Rigol DS1054Z",
@@ -70,22 +61,19 @@ Mengambil seluruh daftar peminjaman (`GET /loans`) atau detail satu transaksi be
 }
 ```
 
-### 3) Update — `PUT /loans/{loan_id}`
-Memperbarui status peminjaman (misalnya menandai alat telah dikembalikan) atau mengubah `due_date` / `quantity`. Jika `status` diubah menjadi `"RETURNED"`, server otomatis mengisi `returned_at`.
-- **Request Body:**
+### 3. Update: `PUT /loans/{loan_id}`
+Mengubah `status`, `due_date`, atau `quantity`. Jika `status` diisi `RETURNED`, field `returned_at` terisi otomatis.
 ```json
 {
   "status": "RETURNED"
 }
 ```
-- **Response (`200 OK`):** Mengembalikan item yang sudah diperbarui.
 
-### 4) Delete — `DELETE /loans/{loan_id}`
-Menghapus data peminjaman berdasarkan `loan_id`.
-- **Response (`200 OK`):**
+### 4. Delete: `DELETE /loans/{loan_id}`
+Menghapus data peminjaman berdasarkan `loan_id` dan mengembalikan status `200`.
 ```json
 {
   "message": "Loan deleted",
-  "loan_id": "a1b2c3d4-..."
+  "loan_id": "a1b2c3d4"
 }
 ```

@@ -1,149 +1,92 @@
-# Laporan Proyek Individu — Week 12: Design & AWS Setup
+# Laporan Proyek Week 12: Design dan AWS Setup
 
-**Mata Kuliah:** AWS Cloud Computing  
-**Judul Proyek:** Sistem Peminjaman Alat Laboratorium (*Equipment Loans API*)  
-**Track Terpilih:** Track C — Serverless (`AWS Lambda Function URL` + `AWS Lambda` + `Amazon DynamoDB`)  
-**Use Case:** Equipment Loans  
-**Region AWS:** `us-east-1` (AWS Academy / Vocareum Sandbox)
-
----
+Mata Kuliah: AWS Cloud Computing
+Proyek: Sistem Peminjaman Alat Lab Equipment Loans API
+Track: Track C Serverless dengan Lambda Function URL, AWS Lambda, dan Amazon DynamoDB
+Region: `us-east-1`
 
 ## 1. Architecture Diagram
 
-### Diagram Arsitektur Solusi
-
 ```mermaid
 flowchart LR
-    subgraph Client_Zone["External / Client"]
-        Client["Client App\n(Browser / curl / PowerShell)"]
+    subgraph Client_Zone["Client"]
+        Client["Browser / curl / PowerShell"]
     end
 
-    subgraph AWS_Cloud["AWS Cloud (Region: us-east-1 — AWS Sandbox)"]
+    subgraph AWS_Cloud["AWS Cloud us-east-1"]
         subgraph Managed_API["Public HTTPS Endpoint"]
-            FURL["AWS Lambda Function URL\n(HTTPS Endpoint — Payload v2.0)\nRoutes: /health, /loans, /loans/{loan_id}"]
+            FURL["AWS Lambda Function URL\nPayload v2.0\nRoutes: /health, /loans, /loans/{loan_id}"]
         end
 
-        subgraph Compute_Layer["Serverless Compute (AWS Managed VPC)"]
-            Lambda["AWS Lambda\nRuntime: Python 3.12\nFunction: equipment-loans-api"]
+        subgraph Compute_Layer["Serverless Compute"]
+            Lambda["AWS Lambda Python 3.12\nequipment-loans-api"]
         end
 
-        subgraph Storage_Observability["Managed Storage & Logging"]
-            DDB[("Amazon DynamoDB\nTable: equipment-loans\nPK: loan_id (String)")]
-            CW["Amazon CloudWatch Logs\nLog Group: /aws/lambda/equipment-loans-api"]
+        subgraph Storage_Observability["Storage dan Logging"]
+            DDB[("Amazon DynamoDB\nTable: equipment-loans\nPK: loan_id")]
+            CW["Amazon CloudWatch Logs\n/aws/lambda/equipment-loans-api"]
         end
 
-        subgraph Security_IAM["IAM & Access Control"]
-            Role["IAM Execution Role: LabRole\n- dynamodb:* (CreateTable, PutItem, GetItem, Scan, UpdateItem, DeleteItem)\n- logs:CreateLogGroup, CreateLogStream, PutLogEvents"]
+        subgraph Security_IAM["IAM"]
+            Role["IAM Role: LabRole\nAkses penuh DynamoDB dan CloudWatch Logs"]
         end
     end
 
-    Client -->|"1. HTTPS Request (JSON)"| FURL
-    FURL -->|"2. Lambda Event (v2.0)"| Lambda
-    Role -.->|"3. Assumed Execution Role"| Lambda
-    Lambda -->|"4. boto3 API Call (TLS)"| DDB
-    Lambda -->|"5. Write Execution Logs"| CW
-    DDB -->|"6. JSON Item / Result"| Lambda
-    Lambda -->|"7. HTTP Status + JSON"| FURL
+    Client -->|"1. HTTPS Request"| FURL
+    FURL -->|"2. Event v2.0"| Lambda
+    Role -.->|"3. Execution Role"| Lambda
+    Lambda -->|"4. boto3 TLS"| DDB
+    Lambda -->|"5. Logs"| CW
+    DDB -->|"6. Result"| Lambda
+    Lambda -->|"7. JSON Response"| FURL
     FURL -->|"8. HTTPS Response"| Client
 ```
 
-### Penjelasan Komponen, Alur Data, Jaringan, & IAM
-- **Public Endpoint (AWS Lambda Function URL):** Menerima request HTTPS dari client dan meneruskannya ke AWS Lambda menggunakan payload format HTTP v2.0. Pada lingkungan sandbox `voclabs`, izin `apigateway:POST` dibatasi oleh policy lab sehingga Lambda Function URL digunakan sebagai alternatif endpoint HTTPS publik (pada lingkungan produksi dapat diganti dengan Amazon API Gateway HTTP API tanpa mengubah kode Lambda).
-- **Compute (AWS Lambda — Python 3.12):** Fungsi `equipment-loans-api` memproses routing `/health` serta 4 operasi CRUD `/loans` menggunakan library `boto3`.
-- **Storage (Amazon DynamoDB):** Tabel `equipment-loans` dengan mode `PAY_PER_REQUEST` (*On-demand*) dan Partition Key `loan_id` (`String`).
-- **IAM & Security (`LabRole`):** Role pengguna sandbox `voclabs` tidak memiliki izin `dynamodb:CreateTable` maupun pembuatan IAM Role baru. Oleh karena itu, Lambda menggunakan **`LabRole`** yang memiliki izin `dynamodb:*` di `us-east-1`. Saat endpoint `/health` dipanggil pertama kali, Lambda (`LabRole`) otomatis membuat tabel `equipment-loans` jika belum tersedia.
-- **Network Boundary:** Seluruh layanan berjalan di atas *AWS Managed Network* dengan komunikasi terenkripsi TLS, tanpa perlu konfigurasi VPC/Subnet/Security Group manual.
-
----
+1. Request HTTPS dari client masuk ke Lambda Function URL. Function URL dipakai sebagai endpoint publik karena policy sandbox `voclabs` membatasi `apigateway:POST`.
+2. Lambda `equipment-loans-api` memproses routing `/health` dan 4 operasi CRUD `/loans`.
+3. Lambda memakai execution role `LabRole` yang memiliki akses `dynamodb:*` di `us-east-1`. Saat `/health` dipanggil pertama kali, Lambda otomatis membuat tabel DynamoDB `equipment-loans`.
+4. Komunikasi antar layanan berjalan di jaringan terkelola AWS dengan enkripsi TLS, dan log eksekusi tercatat di CloudWatch Logs.
 
 ## 2. Design Brief
 
-### 2.1 Use Case & Alasan Pemilihan Track C
-Sistem ini memfasilitasi pencatatan peminjaman alat laboratorium/kampus (seperti oscilloscope, multimeter, atau perangkat jaringan) secara terpusat melalui HTTP API. **Track C (Serverless)** dipilih karena:
-1. Tidak membutuhkan waktu provisioning RDS maupun konfigurasi VM/VPC seperti Track A/B, sehingga sangat sesuai dengan batas sesi **AWS Sandbox (3 jam)**.
-2. Menggunakan skema *pay-per-use* (`Lambda` + `DynamoDB On-demand`) yang hemat kredit sandbox.
-3. Mendukung otomasi *re-deploy* cepat menggunakan script setiap kali sesi sandbox di-reset.
+### Use Case dan Track
+Sistem ini mencatat peminjaman alat laboratorium melalui endpoint HTTP. Track C Serverless dipilih karena proses setup cepat untuk sesi sandbox 3 jam, biaya rendah dengan skema bayar sesuai pemakaian, dan tidak memerlukan konfigurasi VPC atau RDS secara manual.
 
-### 2.2 Data Entity: `EquipmentLoan`
+### Data Entity: `EquipmentLoan`
 Disimpan pada tabel DynamoDB `equipment-loans`:
 
 | Atribut | Tipe | Keterangan |
 |---|---|---|
-| `loan_id` | `String` | **Partition Key** (UUID v4, otomatis dibuat saat `POST`) |
-| `borrower_name` | `String` | Nama lengkap peminjam |
-| `borrower_id` | `String` | NIM / ID peminjam |
-| `equipment_name` | `String` | Nama alat yang dipinjam |
-| `quantity` | `Number` | Jumlah unit (minimal `1`) |
-| `status` | `String` | `BORROWED` (default) atau `RETURNED` |
-| `borrowed_at` | `String` | Timestamp waktu pinjam (ISO-8601 UTC) |
-| `due_date` | `String` | Target tanggal pengembalian (`YYYY-MM-DD`) |
-| `returned_at` | `String` | Timestamp pengembalian (opsional, otomatis diisi saat `RETURNED`) |
+| `loan_id` | `String` | Partition Key UUID v4 |
+| `borrower_name` | `String` | Nama peminjam |
+| `borrower_id` | `String` | NIM atau ID peminjam |
+| `equipment_name` | `String` | Nama alat |
+| `quantity` | `Number` | Jumlah unit |
+| `status` | `String` | `BORROWED` atau `RETURNED` |
+| `borrowed_at` | `String` | Waktu pinjam ISO 8601 UTC |
+| `due_date` | `String` | Batas tanggal kembali |
+| `returned_at` | `String` | Waktu kembali saat status `RETURNED` |
 
-### 2.3 Spesifikasi 4 CRUD Endpoints (+ Health Check)
-
+### 4 Endpoint CRUD dan Health Check
 | Method | Path | Operasi | Fungsi |
 |---|---|---|---|
-| `GET` | `/health` | Health Check | Cek status Lambda & memastikan tabel DynamoDB `ACTIVE` |
-| `POST` | `/loans` | **Create** | Mencatat transaksi peminjaman baru (`201 Created`) |
-| `GET` | `/loans` | **Read (List)** | Mengambil seluruh daftar peminjaman (`200 OK`) |
-| `GET` | `/loans/{loan_id}` | **Read (Detail)** | Mengambil detail peminjaman berdasarkan `loan_id` (`200 OK`) |
-| `PUT` | `/loans/{loan_id}` | **Update** | Memperbarui `status` (`RETURNED`), `due_date`, atau `quantity` (`200 OK`) |
-| `DELETE` | `/loans/{loan_id}` | **Delete** | Menghapus data peminjaman berdasarkan `loan_id` (`200 OK`) |
+| `GET` | `/health` | Health Check | Cek status Lambda dan tabel DynamoDB |
+| `POST` | `/loans` | Create | Catat peminjaman alat baru |
+| `GET` | `/loans` | Read | Ambil daftar atau detail peminjaman |
+| `PUT` | `/loans/{loan_id}` | Update | Ubah status pengembalian atau `due_date` |
+| `DELETE` | `/loans/{loan_id}` | Delete | Hapus data peminjaman |
 
-**Contoh Request `POST /loans`:**
-```json
-{
-  "borrower_name": "Budi Santoso",
-  "borrower_id": "220123456",
-  "equipment_name": "Oscilloscope Rigol DS1054Z",
-  "quantity": 1,
-  "due_date": "2026-12-03"
-}
-```
+## 3. Git Repository dan Deployment Plan
+Repository tersedia di `https://github.com/juancrcr/Project-aws` dengan progressive commits, dokumentasi lengkap, kode handler `src/lambda_function.py`, unit test offline `src/local_test.py` dengan hasil 3 dari 3 test lulus, serta script otomasi `scripts/setup-aws.ps1` dan `scripts/save-evidence.ps1` untuk deploy ulang saat sandbox reset setiap 3 jam.
 
----
+## 4. AWS Evidence
+Pengujian live dilakukan pada akun AWS Sandbox `562544635771` di region `us-east-1` dengan endpoint `https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws`:
 
-## 3. Git Repository & Deployment Plan
-
-Repository proyek tersimpan secara lokal di `D:\Game\projectaws` dengan struktur:
-- `README.md` — Ringkasan proyek, daftar endpoint, dan deployment plan.
-- `src/lambda_function.py` — Handler AWS Lambda (`Python 3.12`) untuk seluruh endpoint CRUD & auto-create tabel DynamoDB.
-- `src/local_test.py` — Unit test offline (`python -m unittest discover -s src -p "*test*.py" -v`) dengan hasil **3/3 tests OK**.
-- `scripts/setup-aws.ps1` & `scripts/setup-aws.sh` — Script otomasi deploy ulang infrastruktur saat sesi sandbox 3 jam dimulai.
-- `scripts/save-evidence.ps1` — Script pengujian live & backup data DynamoDB ke folder `evidence/`.
-- `docs/` — Dokumentasi arsitektur, design brief, panduan setup, dan laporan ini.
-
-### Progressive Commits
-Repository dibangun secara bertahap dengan commit history yang terstruktur:
-1. `bd71d59` — `chore: initialize repository with README and gitignore`
-2. `2b32362` — `docs: add design brief and serverless architecture diagram`
-3. `c2b5774` — `feat: implement EquipmentLoan CRUD Lambda handler and requirements`
-4. `17d9602` — `test: add offline unit tests and make boto3 import optional locally`
-5. `c056dba` — `docs: add AWS Learner Lab setup guide and evidence checklist`
-6. `d699bc6` — `feat: add sandbox auto-setup and evidence backup scripts`
-7. `8902b09` — `fix: auto-create DynamoDB via LabRole and fallback to Lambda Function URL`
-8. `fc7ad39` — `docs: align architecture diagram, design brief, and setup guide with Lambda Function URL`
-
----
-
-## 4. AWS Evidence (Connectivity & Test Outputs)
-
-Deployment telah diverifikasi langsung pada akun AWS Sandbox (`Account ID: 562544635771`, Region: `us-east-1`):
-
-- **Live Endpoint (Lambda Function URL):**  
-  `https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws`
-- **Hasil Uji Konektivitas (`GET /health`):**
-  ```json
-  {
-    "status": "ok",
-    "table": "equipment-loans",
-    "table_status": "ACTIVE"
-  }
-  ```
-- **Hasil Uji `POST /loans` & `GET /loans`:**  
-  Berhasil menyimpan dan membaca kembali **2 item** data peminjaman pada tabel DynamoDB `equipment-loans` (tersimpan di `evidence/aws-evidence-20261126-120628.txt` dan `evidence/dynamodb-backup-20261126-120628.json`).
-- **Lampiran Screenshot:**
-  1. Tabel DynamoDB `equipment-loans` berstatus `Active` & halaman **Explore items** (`2` item tersimpan).
-  2. Halaman Overview Lambda `equipment-loans-api` (menampilkan **Function URL** & **Execution role `LabRole`**).
-  3. Detail IAM Role `LabRole` & hasil Lambda **Test Event** `/health` (`Execution result: succeeded`, `statusCode: 200`).
-  4. Hasil akses live endpoint `/loans` melalui browser dan output terminal `save-evidence.ps1`.
+1. Gambar 0: Tabel DynamoDB `equipment-loans` berstatus `Active` dengan Partition Key `loan_id` dan mode `On-demand`.
+2. Gambar 1: Halaman Explore items pada tabel `equipment-loans` menampilkan 2 item data peminjaman yang berhasil tersimpan.
+3. Gambar 2: Halaman overview Lambda `equipment-loans-api` menampilkan Function ARN, Function URL, dan Execution role `LabRole`.
+4. Gambar 3: Tab Configuration Permissions pada Lambda menunjukkan policy `LabRole` yang aktif.
+5. Gambar 4: Halaman IAM Role `LabRole` menampilkan 4 policy terpasang untuk akses DynamoDB dan CloudWatch Logs.
+6. Gambar 5: Tab Test di konsol Lambda menunjukkan eksekusi `/health` berhasil dengan `statusCode` 200 dan `table_status` `ACTIVE`.
+7. Gambar 6: Akses langsung endpoint `/loans` melalui browser menampilkan data JSON dengan 2 item peminjaman.
+8. Gambar 7: File `evidence/aws-evidence-20261126-120628.txt` merekam hasil uji `GET /health`, `POST /loans`, dan `GET /loans` secara lengkap.
