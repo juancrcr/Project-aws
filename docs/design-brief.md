@@ -1,7 +1,7 @@
 # Design Brief — Sistem Peminjaman Alat Lab (Equipment Loans)
 
 **Mata Kuliah:** AWS Cloud Computing — Individual Project (Week 12)  
-**Track Terpilih:** Track C | Serverless (`Amazon API Gateway` + `AWS Lambda` + `Amazon DynamoDB`)  
+**Track Terpilih:** Track C | Serverless (`AWS Lambda Function URL` + `AWS Lambda` + `Amazon DynamoDB`)  
 **Use Case:** Equipment Loans (Manajemen Peminjaman Alat Laboratorium/Kampus)
 
 ---
@@ -12,9 +12,9 @@ Laboratorium kampus atau unit inventaris sering kali masih mencatat peminjaman a
 Aplikasi **Equipment Loans API** menyediakan backend berbasis REST/HTTP API yang ringan untuk mencatat peminjaman baru, melihat daftar peminjaman aktif, memperbarui status saat alat dikembalikan, serta menghapus data uji/tidak valid.
 
 ## 2. Alasan Pemilihan Track C (Serverless)
-1. **Efisien untuk AWS Learner Lab:** Tidak memerlukan waktu tunggu provisioning database relasional (RDS) maupun konfigurasi VPC/Security Group/SSH seperti pada Track A/B.
-2. **Hemat Kredit & Auto-Scaling:** API Gateway, Lambda, dan DynamoDB (On-Demand) hanya mengenakan biaya saat ada request masuk (*pay-per-use*), sehingga sangat aman terhadap batas kredit AWS Learner Lab.
-3. **Kesesuaian IAM Learner Lab:** AWS Lambda dapat langsung menggunakan pre-configured role **`LabRole`** yang sudah memiliki izin akses DynamoDB dan CloudWatch Logs tanpa perlu membuat custom IAM Role baru.
+1. **Efisien untuk AWS Learner Lab / Sandbox (3 Jam):** Tidak memerlukan waktu tunggu provisioning database relasional (RDS) maupun konfigurasi VPC/Security Group/SSH seperti pada Track A/B, serta dapat di-deploy ulang otomatis dalam hitungan detik saat sesi sandbox reset.
+2. **Hemat Kredit & Auto-Scaling:** Lambda Function URL, Lambda, dan DynamoDB (`PAY_PER_REQUEST`) hanya mengenakan biaya saat ada request masuk (*pay-per-use*), sehingga sangat aman terhadap batas kredit AWS Learner Lab.
+3. **Kesesuaian IAM Sandbox (`LabRole` & Lambda Function URL):** Pada sandbox `voclabs`, izin `apigateway:POST` dan `dynamodb:CreateTable` langsung oleh user dibatasi. Oleh karena itu, arsitektur ini memanfaatkan **Lambda Function URL** sebagai HTTPS endpoint publik (pengganti API Gateway yang kompatibel dengan event format v2.0) dan **`LabRole`** pada Lambda agar Lambda dapat membuat serta mengakses tabel DynamoDB secara otomatis di `us-east-1`.
 
 ## 3. Data Entity: `EquipmentLoan`
 Sistem menggunakan **1 entitas utama** yang disimpan pada tabel Amazon DynamoDB bernama `equipment-loans`.

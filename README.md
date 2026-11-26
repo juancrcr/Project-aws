@@ -3,10 +3,10 @@
 Proyek individu **AWS Cloud Computing — Week 12** menggunakan **Track C (Serverless)** untuk use case **Equipment Loans** (Sistem Peminjaman Alat Lab/Kampus).
 
 ## Arsitektur Singkat
-- **Amazon API Gateway (HTTP API)**: Menerima request HTTP/HTTPS dari client dan meneruskannya ke Lambda.
-- **AWS Lambda (Python 3.12)**: Menjalankan logika bisnis & routing CRUD untuk entitas `EquipmentLoan`.
+- **AWS Lambda Function URL**: Endpoint HTTPS publik yang meneruskan request ke Lambda menggunakan payload format v2.0 (digunakan sebagai alternatif API Gateway karena pembatasan `apigateway:POST` pada role sandbox `voclabs`).
+- **AWS Lambda (Python 3.12)**: Menjalankan logika bisnis, auto-provisioning tabel DynamoDB jika belum ada, dan routing CRUD untuk entitas `EquipmentLoan`.
 - **Amazon DynamoDB**: Menyimpan data peminjaman pada tabel `equipment-loans` (Partition Key: `loan_id`).
-- **IAM (`LabRole`) & CloudWatch Logs**: Mengatur izin akses Lambda ke DynamoDB serta pencatatan log eksekusi di AWS Learner Lab.
+- **IAM (`LabRole`) & CloudWatch Logs**: Mengatur izin akses penuh Lambda ke DynamoDB (`us-east-1`) serta pencatatan log eksekusi.
 
 ## Struktur Repository
 ```text
@@ -38,13 +38,11 @@ Proyek individu **AWS Cloud Computing — Week 12** menggunakan **Track C (Serve
 python -m unittest discover -s src -p "*test*.py" -v
 ```
 
-## Deployment Plan (AWS Learner Lab)
-1. Buat tabel DynamoDB bernama `equipment-loans` dengan Partition Key `loan_id` (`String`).
-2. Buat fungsi AWS Lambda (runtime Python 3.12) dengan execution role **`LabRole`**.
-3. Set environment variable `TABLE_NAME=equipment-loans` pada konfigurasi Lambda.
-4. Upload kode `src/lambda_function.py` ke Lambda.
-5. Buat **API Gateway (HTTP API)** dengan rute `/health`, `/loans`, dan `/loans/{loan_id}` yang terintegrasi ke Lambda.
-6. Verifikasi konektivitas menggunakan Lambda Test Event dan `curl` ke Invoke URL API Gateway.
+## Deployment Plan (AWS Learner Lab / Sandbox)
+1. Deploy fungsi AWS Lambda `equipment-loans-api` (runtime Python 3.12) di `us-east-1` dengan execution role **`LabRole`** dan environment variable `TABLE_NAME=equipment-loans`.
+2. Aktifkan **Lambda Function URL** (`AuthType: NONE`) atau API Gateway HTTP API (jika diizinkan oleh lab).
+3. Panggil `GET /health` agar Lambda (`LabRole`) otomatis memverifikasi/membuat tabel DynamoDB `equipment-loans` (Partition Key `loan_id`, `PAY_PER_REQUEST`).
+4. Uji endpoint CRUD (`/loans`) dan simpan bukti eksekusi ke folder `evidence/`.
 
 ## Auto-Setup untuk AWS Sandbox (Reset Tiap 3 Jam)
 Karena sesi AWS Sandbox / Learner Lab akan ter-reset setelah 3 jam, gunakan script berikut untuk membuat ulang seluruh resource dalam sekali jalan dan menyimpan bukti/backup ke lokal:

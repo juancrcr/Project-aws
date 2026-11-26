@@ -1,0 +1,58 @@
+﻿=== AWS SANDBOX EVIDENCE (20261126-120628) ===
+Invoke URL : https://dhhveo7c4ngrtmvcchon57svmm0twlpg.lambda-url.us-east-1.on.aws
+
+--- 1. GET /health ---
+{
+    "status":  "ok",
+    "table":  "equipment-loans",
+    "table_status":  "ACTIVE"
+}
+
+--- 2. POST /loans (Create Sample) ---
+{
+    "message":  "Loan created",
+    "item":  {
+                 "loan_id":  "b9b732d8-7f39-4572-b43e-56bb7f570d3b",
+                 "borrower_name":  "Budi Santoso",
+                 "borrower_id":  "220123456",
+                 "equipment_name":  "Oscilloscope Rigol DS1054Z",
+                 "quantity":  1,
+                 "status":  "BORROWED",
+                 "borrowed_at":  "2026-11-26T05:06:34.844083+00:00",
+                 "due_date":  "2026-12-03"
+             }
+}
+
+--- 3. GET /loans (List) ---
+{
+    "count":  2,
+    "items":  [
+                  {
+                      "quantity":  1,
+                      "equipment_name":  "Oscilloscope Rigol DS1054Z",
+                      "borrowed_at":  "2026-11-26T05:06:34.844083+00:00",
+                      "status":  "BORROWED",
+                      "borrower_id":  "220123456",
+                      "borrower_name":  "Budi Santoso",
+                      "due_date":  "2026-12-03",
+                      "loan_id":  "b9b732d8-7f39-4572-b43e-56bb7f570d3b"
+                  },
+                  {
+                      "quantity":  1,
+                      "equipment_name":  "Oscilloscope Rigol DS1054Z",
+                      "borrowed_at":  "2026-11-26T05:05:50.848305+00:00",
+                      "status":  "BORROWED",
+                      "borrower_id":  "220123456",
+                      "borrower_name":  "Budi Santoso",
+                      "due_date":  "2026-12-03",
+                      "loan_id":  "d08c43dd-d177-4cb8-843e-342db931351e"
+                  }
+              ]
+}
+
+--- 4. DynamoDB Table Status ---
+{
+    "Name": "equipment-loans",
+    "Status": "ACTIVE",
+    "ItemCount": 0
+}

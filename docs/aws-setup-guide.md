@@ -86,11 +86,11 @@ curl -i <INVOKE_URL>/loans
 ---
 
 ## Checklist Pengumpulan Week 12
-- [ ] **Architecture diagram** (`docs/architecture.md` — bisa diekspor ke PNG dari Mermaid/draw.io)
-- [ ] **Design brief (1–2 halaman)** (`docs/design-brief.md`)
-- [ ] **Git repository** (repo ini dengan progressive commits)
+- [x] **Architecture diagram** (`docs/architecture.md` — Mermaid diagram dengan Lambda Function URL, Lambda `LabRole`, DynamoDB, CloudWatch Logs)
+- [x] **Design brief (1–2 halaman)** (`docs/design-brief.md`)
+- [x] **Git repository** (repo ini dengan progressive commits)
 - [ ] **AWS evidence:**
-  - [ ] Screenshot tabel DynamoDB `equipment-loans` (Active)
-  - [ ] Screenshot Lambda `equipment-loans-api` + Execution Role `LabRole` + hasil Test Event `/health`
-  - [ ] Screenshot API Gateway routes & Invoke URL
-  - [ ] Screenshot output `curl /health` & `curl /loans`
+  - [ ] Screenshot Lambda `equipment-loans-api` (Overview dengan **Function URL**, serta tab **Configuration -> Permissions** terlihat `LabRole`)
+  - [ ] Screenshot hasil Lambda **Test Event** `/health` (`Execution result: succeeded`, `table_status: ACTIVE`)
+  - [ ] Screenshot tabel DynamoDB `equipment-loans` (status **Active** & **Explore items**)
+  - [ ] Screenshot browser/terminal saat mengakses `<FUNCTION_URL>/loans` (atau lampirkan file output di folder `evidence/`)
