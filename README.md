@@ -12,10 +12,8 @@ Proyek individu AWS Cloud Computing Week 12 dengan Track C Serverless untuk kasu
 ```text
 .
 ├── docs/
-│   ├── LAPORAN_WEEK12.md
-│   ├── architecture.md
-│   ├── aws-setup-guide.md
-│   └── design-brief.md
+│   ├── Lporan Tugas .pdf
+│   ├── arsitektur-equipment-loans.drawio.png
 ├── evidence/
 ├── scripts/
 │   ├── save-evidence.ps1
@@ -25,7 +23,6 @@ Proyek individu AWS Cloud Computing Week 12 dengan Track C Serverless untuk kasu
 │   ├── lambda_function.py
 │   └── local_test.py
 ├── .gitignore
-├── requirements.txt
 └── README.md
 ```
 
